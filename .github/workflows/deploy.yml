@@ -1,0 +1,47 @@
+# GitHub Pages 배포 워크플로
+# ⚠️ 자동 배포를 막기 위해 수동 실행(workflow_dispatch)만 허용합니다.
+#    GitHub 저장소 > Actions > "Deploy to GitHub Pages" > Run workflow 로 직접 실행하세요.
+#    (사전 설정: Settings > Pages > Source 를 "GitHub Actions"로 지정)
+name: Deploy to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+        env:
+          # <user>.github.io 저장소면 "/", 그 외 프로젝트 저장소면 "/<repo>/"
+          VITE_BASE: ${{ endsWith(github.event.repository.name, '.github.io') && '/' || format('/{0}/', github.event.repository.name) }}
+          VITE_CONTACT_ENDPOINT: ${{ vars.VITE_CONTACT_ENDPOINT }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
